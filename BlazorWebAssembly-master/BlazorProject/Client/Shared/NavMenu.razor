@@ -1,0 +1,11 @@
+﻿@using MudBlazor
+
+<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All">Home</MudNavLink>
+    <MudNavLink Href="/changesem"j Target="_blank" Match="NavLinkMatch.Prefix">Login</MudNavLink>
+    <MudNavGroup Title="Admin" Expanded="true">
+        <MudNavLink Href="/data" Target="_blank" Match="NavLinkMatch.Prefix">Admin Login</MudNavLink>
+        <MudNavLink Href="/security" Target="_blank" Match="NavLinkMatch.Prefix">Settings</MudNavLink>
+    </MudNavGroup>
+    <MudNavLink Href="/about" Target="_blank" Match="NavLinkMatch.Prefix">About</MudNavLink>
+</MudNavMenu>

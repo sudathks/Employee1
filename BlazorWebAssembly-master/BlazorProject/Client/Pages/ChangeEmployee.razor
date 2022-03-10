@@ -1,0 +1,347 @@
+﻿@page "/changesem"
+
+@using BlazorProject.Shared
+@using MudBlazor
+@inject IndexedEdbStore IndexedEdbStore
+@inject IJSRuntime JS
+@inject IDialogService _dialogService
+@inject IToastService toastService
+@attribute [Authorize]
+
+<MudContainer>
+    <MudGrid >
+        <MudItem xs="12" sm="6" md="3">
+            <MudTextField Required="true" @bind-Value="employee.FirstName" Label="First Name" Variant="Variant.Outlined" Margin="Margin.Normal"></MudTextField>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudTextField Required="true" @bind-Value="employee.LastName" Label="Last Name" Variant="Variant.Outlined" Margin="Margin.Normal"></MudTextField>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudTextField Required="true" @bind-Value="employee.Email" Label="Email" Variant="Variant.Outlined" Margin="Margin.Normal"></MudTextField>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudDatePicker Required="true" Label="Date of Birth" @bind-Date="employee.DateOfBrith"/>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudAutocomplete 
+            T="string" 
+            Label="Gender" 
+            @bind-Value="gender"
+            Required="true"
+            SearchFunc="@SearchGender" 
+            Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">        
+        <MudAutocomplete 
+            T="Department"  
+            Label="Department"
+            Required="true"
+            @bind-Value="department" 
+            SearchFunc="@SearchDepartment" 
+            ToStringFunc="@(e=> e==null?null : $"{e.DepartmentName}")" 
+            Variant="Variant.Outlined"/>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <div class="col-md-6 text-center">
+                <MudButton class="btn btn-primary btn-lg" Variant="Variant.Filled" Color="Color.Success" OnClick="Save">Add Employee</MudButton>
+            </div>
+        </MudItem>
+        @*<MudHidden Invert="true">
+            <MudTextField Label="Update Time" @bind-Value="@updateTime" />
+        </MudHidden>*@
+</MudGrid>
+</MudContainer>
+
+<br />
+<MudTable Elevation="25" Items="GetEmployees()" Filter="new Func<Employee, bool>(Search)" @bind-customer="employee" FixedHeader="@fixed_header" FixedFooter="@fixed_footer" Height="@(fixed_header || fixed_footer ?"400px":"")">
+    <ToolBarContent>
+        <MudTextField @bind-Value="searchString" Placeholder="Search for Customers..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>First Name</MudTh>
+        <MudTh>Last Name</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>DoB</MudTh>
+        <MudTh>Gender</MudTh> 
+        <MudTh>Department</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="FirstName">@context.FirstName</MudTd>
+        <MudTd DataLabel="LastName">@context.LastName</MudTd>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="DoB">@context.DateOfBrith</MudTd>
+        <MudTd DataLabel="Gender">@context.Gender</MudTd>
+        <MudTd DataLabel="Department">@context.Department.DepartmentName</MudTd>
+        <MudTd DataLabel="">
+            <MudFab @onclick="@(()=>CreateAsync(@context.EmployeeId))" Color="Color.Primary" Icon="@Icons.Material.Filled.Edit" Size="Size.Small" IconSize="Size.Small" />
+            <MudFab @onclick="@(()=>OnButtonClicked(@context.EmployeeId))" Color="Color.Secondary" Icon="@Icons.Material.Filled.Delete" Size="Size.Small" IconSize="Size.Small" />
+        </MudTd>
+    </RowTemplate>
+    <FooterContent>
+        <MudTh>First Name</MudTh>
+        <MudTh>Last Name</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>DoB</MudTh>
+        <MudTh>Gender</MudTh> 
+        <MudTh>Department</MudTh>
+        <MudTh>Actions</MudTh>
+    </FooterContent>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[]{5, 10, 20, 50, 100}" />
+    </PagerContent>
+</MudTable>
+
+@*<MudSwitch @bind-Checked="@fixed_header">Fixed Header</MudSwitch>
+<MudSwitch @bind-Checked="@fixed_footer">Fixed Footer</MudSwitch>*@
+
+@code{
+
+    bool fixed_header = true;
+    bool fixed_footer = false;
+
+    private Employee employee;
+    private List<Employee> Employees { get; set; }
+    private IEnumerable<Department> Departments { get; set; }
+    private List<Employee> AllIndexeEmp { get; set; }
+    private List<Employee> AllTmpIndexEmp { get; set; }
+    private List<Employee> AllLocalEmp { get; set; }
+    private string searchString = "";
+    private string[] GenderNames { get; set; }
+    private string gender;
+    private Department department;
+    Gender g;
+    //private DateTime? updateTime { get; set; } = DateTime.Now;
+
+    [Inject]
+    public IEmployeeService EmployeeService { get; set; }
+
+    [Inject]
+    public IDepartmentService DepartmentService { get; set; }
+
+    [Inject] 
+    private IDialogService DialogService { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        employee = new Employee();
+        department = new Department();
+        GenderNames = Enum.GetNames(typeof(Gender));
+
+        //Departments = (await DepartmentService.GetAllDepartments()).ToList();
+        Departments = await IndexedEdbStore.GetAllDepartmentAsync();
+
+        try
+        {
+            Employees = (await EmployeeService.GetAllEmployees()).ToList();
+        } catch (Exception ex)
+        {
+            AllIndexeEmp = (await IndexedEdbStore.GetAllEmployeeAsync("Employee")).ToList();
+            AllTmpIndexEmp = (await IndexedEdbStore.GetAllEmployeeAsync("TemEmployee")).ToList();
+            AllLocalEmp = AllIndexeEmp.Concat(AllTmpIndexEmp).ToList();
+            Employees = AllLocalEmp;
+        }
+
+        //await RequestNotificationSubscriptionAsync();
+    }
+
+    private async Task CreateAsync(Guid id)
+    {
+        Employee updateEmp = new Employee();
+        try
+        {
+            updateEmp = Employees.FirstOrDefault(c => c.EmployeeId == id);
+        }
+        catch (Exception ex)
+        {
+            updateEmp = await IndexedEdbStore.GetEmployeeAsync("Employee", id);
+
+            if (updateEmp == null)
+            {
+                updateEmp = await IndexedEdbStore.GetEmployeeAsync("TemEmployee", id);
+            }
+        }
+        Employee e1 = await IndexedEdbStore.GetEmployeeAsync("Employee", id);
+
+        var parameters = new DialogParameters();
+        parameters.Add("employee", updateEmp);
+
+        var dialog = await _dialogService.Show<UpdateEmployee>("Update Employee", parameters).Result;
+
+        if (dialog.Data != null)
+        { 
+            Employee dialogEmp = (Employee)dialog.Data;
+
+            if (dialogEmp.LastName != "" && dialogEmp.FirstName != "" && dialogEmp.Email != "")
+            {
+                try
+                {
+                    await EmployeeService.DeleteEmployee(dialogEmp.EmployeeId);
+                    await EmployeeService.AddEmployee(dialogEmp);
+
+                    //await EmployeeService.UpdateEmployee(dialogEmp);
+
+                    await IndexedEdbStore.DeleteEmployeeAsync("Employee", dialogEmp.EmployeeId);
+                    await IndexedEdbStore.SaveEmplyeeAsync("Employee", dialogEmp);
+
+                    //await IndexedEdbStore.UpdateEmployeeAsync(employee.EmployeeId, employee);
+                }
+                catch (Exception ex)
+                {
+                    foreach (Employee em in (await IndexedEdbStore.GetAllEmployeeAsync("Employee")).ToList())
+                    {
+                        if ((em.EmployeeId).Equals(employee.EmployeeId))
+                        {
+                            await IndexedEdbStore.DeleteEmployeeAsync("Employee", dialogEmp.EmployeeId);
+                            await IndexedEdbStore.SaveEmplyeeAsync("TemEmployee", dialogEmp);
+                        }
+                    }
+
+                    foreach (Employee em in (await IndexedEdbStore.GetAllEmployeeAsync("TemEmployee")).ToList())
+                    {
+                        if ((em.EmployeeId).Equals(dialogEmp.EmployeeId))
+                        {
+                            await IndexedEdbStore.DeleteEmployeeAsync("TemEmployee", dialogEmp.EmployeeId);
+                            await IndexedEdbStore.SaveEmplyeeAsync("TemEmployee", dialogEmp);
+                        }
+                    }
+                }
+                finally
+                {
+                    toastService.ShowSuccess("You have successfully edited employee details");
+                    Clean();
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+               toastService.ShowError("Please fill in the all details");
+            }
+        }
+    }
+
+    public List<Employee> GetEmployees()
+    {  
+        return Employees;
+    }
+
+    private bool Search(Employee employee)
+    {
+        if (string.IsNullOrWhiteSpace(searchString)) return true;
+        if (employee.FirstName.Contains(searchString, StringComparison.OrdinalIgnoreCase)
+            || employee.LastName.Contains(searchString, StringComparison.OrdinalIgnoreCase)
+            || employee.Email.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        return false; 
+    }
+    private async void Save()
+    {
+        employee.EmployeeId = Guid.NewGuid();
+        employee.Department = department;
+        employee.DepartmentId = department.DepartmentId;
+        Enum.TryParse(gender, out g);
+        employee.Gender = g;
+        employee.LastUpdated = DateTime.Now;
+
+        if (employee.LastName != null && employee.FirstName != null && employee.DateOfBrith != null && employee.Email != null && department.DepartmentName != null)
+        {
+            try
+            {
+                await EmployeeService.AddEmployee(employee);
+                Employees = (await EmployeeService.GetAllEmployees()).ToList();
+
+                await IndexedEdbStore.SaveEmplyeeAsync("Employee", employee);
+            }
+            catch (Exception e)
+            {
+                await IndexedEdbStore.SaveEmplyeeAsync("TemEmployee", employee);
+
+                AllIndexeEmp = (await IndexedEdbStore.GetAllEmployeeAsync("Employee")).ToList();
+                AllTmpIndexEmp = (await IndexedEdbStore.GetAllEmployeeAsync("TemEmployee")).ToList();
+                AllLocalEmp = AllIndexeEmp.Concat(AllTmpIndexEmp).ToList();
+                Employees = AllLocalEmp;
+            }
+            finally
+            {
+                toastService.ShowSuccess("You have successfully added a new employee");
+                Clean();
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            toastService.ShowError("Please fill in the all details");
+        }
+    }
+
+    private async void OnButtonClicked(Guid id)
+    {
+        bool status = false;
+
+        bool? result = await DialogService.ShowMessageBox(
+            "Warning",
+            "Are you sure you want to delete?",
+            yesText: "Delete", cancelText: "Cancel");
+            status = result==null ? false : true;
+
+            if (status) { 
+                try
+                {
+                    await EmployeeService.DeleteEmployee(id);
+                    await IndexedEdbStore.DeleteEmployeeAsync("Employee", id);
+
+                    Employees = (await EmployeeService.GetAllEmployees()).ToList();
+                }
+                catch (Exception ex)
+                {
+                    await IndexedEdbStore.DeleteEmployeeAsync("Employee", id);
+                    await IndexedEdbStore.DeleteEmployeeAsync("TemEmployee", id);
+                }
+                finally
+                {
+                    toastService.ShowSuccess("You have successfully deleted an employee");
+                    StateHasChanged();
+                }
+            }
+    }
+
+    private async Task<IEnumerable<string>> SearchGender(string value)
+    {
+        return Enum.GetNames(typeof(Gender));
+    }
+
+    private async Task<IEnumerable<Department>> SearchDepartment(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Departments;
+        return Departments.Where(x => x.DepartmentName.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    private async void Clean()
+    {
+        employee.FirstName = "";
+        employee.LastName = "";
+        employee.Email = "";
+        employee.DateOfBrith =  null;
+        department.DepartmentName = "";
+        gender = "";
+    }
+
+    async Task RequestNotificationSubscriptionAsync()
+    {
+        var subscription = await JS.InvokeAsync<NotificationSubscription>("blazorPushNotifications.requestSubscription");
+        if (subscription != null)
+        {
+            try
+            {
+                await IndexedEdbStore.SubscribeToNotifications(subscription);
+            }
+            catch (AccessTokenNotAvailableException ex)
+            {
+                ex.Redirect();
+            }
+        }
+    }
+}                       

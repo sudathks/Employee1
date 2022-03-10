@@ -1,0 +1,66 @@
+﻿@using MudBlazor
+@inherits LayoutComponentBase
+@inject IndexedEdbStore IndexedEdbStore
+@inject NavigationManager NavigationManager
+
+<MudThemeProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<MudLayout>
+    <MudAppBar Color="Color.Primary" Fixed="false">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        Employees Management System
+    </MudAppBar>
+    <MudDrawer @bind-Open="@_drawerOpen">
+        <NavMenu/>
+    </MudDrawer>
+    <MudMainContent Class="d-flex flex-column">
+        <MudPaper Class="flex-grow-1 flex-shrink-0 pa-2 mx-2" >
+            @Body
+        </MudPaper>
+        <MudPaper Class="align-self-end">
+            <footer class="page-footer font-small">
+                @*<MudText Align="Align.Center" colspan="5">Last Update Time: @lastUpdated</MudText>*@
+                <div Class="d-flex flex-wrap mx-auto gap-2 mt-3">
+                    <MudTd Align="Align.Center" colspan="4">Last Update Time: @lastUpdated</MudTd>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="Navigate">Home</MudButton>
+                    @*<div>
+                        <input type="button" style="color:white; background-color:gray;" text-align="center" value="Reload Page" onClick="window.location.reload()">
+                    </div>*@
+                </div>
+            </footer>
+        </MudPaper>
+    </MudMainContent>
+</MudLayout>
+
+<Blazored.Toast.BlazoredToasts 
+    Position="Blazored.Toast.Configuration.ToastPosition.BottomRight"
+    Timeout="10"
+    IconType="Blazored.Toast.IconType.Material"/>
+
+
+@code {
+    bool _drawerOpen = true;
+    DateTime? lastUpdated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Synchronize();
+    }
+
+    async Task Synchronize()
+    {
+        lastUpdated = await IndexedEdbStore.GetLastUpdateDateAsync();
+    }
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void Navigate() 
+    {
+        NavigationManager.NavigateTo("");
+    }
+}

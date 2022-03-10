@@ -1,0 +1,7 @@
+﻿@page "/security"
+@inject IModalService modalService
+@inject IToastService toastService
+
+<h1>Security</h1>
+
+<button @onclick="@(()=>modalService.Show<ToastDemo>("Modal Example"))" class="btn btn-primary">Toast Demo</button>

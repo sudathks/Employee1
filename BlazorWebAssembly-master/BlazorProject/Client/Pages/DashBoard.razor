@@ -1,0 +1,164 @@
+﻿@page "/"
+@using BlazorProject.Shared
+@inject IndexedEdbStore IndexedEdbStore
+@inject IJSRuntime JS
+@inject IToastService toastService
+
+<MudTable Items="@Employees" Filter="new Func<Employee,bool>(FilterFunc1)" FixedHeader="@fixed_header" FixedFooter="@fixed_footer" Height="@(fixed_header || fixed_footer ?"400px":"")">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Employee List</MudText>
+        <MudSpacer/>
+        <MudTextField @bind-Value="searchString1" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>First Name</MudTh>
+        <MudTh>Last Name</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Gender</MudTh>
+        <MudTh>Department</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="First Name">@context.FirstName</MudTd>
+        <MudTd DataLabel="Last Name">@context.LastName</MudTd>
+        <MudTd DataLabel=Email>@context.Email</MudTd>
+        <MudTd DataLabel="Gender">@context.Gender</MudTd>
+        <MudTd DataLabel="Department Name">@context.Department.DepartmentName</MudTd>
+    </RowTemplate>
+    @*<FooterContent>
+        <MudTh>First Name</MudTh>
+        <MudTh>Last Name</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Gender</MudTh>
+        <MudTh>Department</MudTh>
+    </FooterContent>*@
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[]{5, 10, 20, 50, 100}" />
+    </PagerContent>
+</MudTable>
+
+@code{
+    bool fixed_header = true;
+    bool fixed_footer = false;
+
+    public List<Employee> Employees { get; set; } = new List<Employee>();
+
+    public List<Department> Departments { get; set; } = new List<Department>();
+
+    private List<Employee> AllIndexeEmp { get; set; } = new List<Employee>();
+    private List<Employee> AllTmpIndexEmp { get; set; } = new List<Employee>();
+    private List<Employee> AllLocalEmp { get; set; } = new List<Employee>();
+
+    private Time lastTime = new Time();
+    private List<Time> time { get; set; } = new List<Time>(); 
+
+    [Inject]
+    public IDepartmentService DepartmentService { get; set; }
+
+    [Inject]
+    public IEmployeeService EmployeeService { get; set; }
+
+    private string searchString1 = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Departments = (await IndexedEdbStore.GetAllDepartmentAsync()).ToList();
+
+        try
+        {
+            toastService.ShowInfo("You'r Online");
+
+            Employees = (await EmployeeService.GetAllEmployees()).ToList();
+            await SynchronizeAsync(Employees);
+
+        } catch (Exception ex)
+        {
+            toastService.ShowInfo("No Internet Connection, You'r Offline");
+
+            AllIndexeEmp = (await IndexedEdbStore.GetAllEmployeeAsync("Employee")).ToList();
+            AllTmpIndexEmp = (await IndexedEdbStore.GetAllEmployeeAsync("TemEmployee")).ToList();
+            AllLocalEmp = AllIndexeEmp.Concat(AllTmpIndexEmp).ToList();
+            Employees = AllLocalEmp;
+        }
+    }
+
+    private bool FilterFunc1(Employee element) => FilterFunc(element, searchString1);
+
+    private bool FilterFunc(Employee element, string searchString)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (element.FirstName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.LastName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+    public async Task SynchronizeAsync(List<Employee> em)
+    {
+        List<Employee> temporyData = (await IndexedEdbStore.GetAllEmployeeAsync("TemEmployee")).ToList();
+
+        if (temporyData != null)
+        {
+            foreach (Employee employee in temporyData)
+            {
+                await IndexedEdbStore.SaveEmplyeeAsync("Employee", employee);
+
+                foreach (Employee serverEmployee in em)
+                {
+                    if ((employee.EmployeeId).Equals(serverEmployee.EmployeeId))
+                    {
+                        await EmployeeService.DeleteEmployee(serverEmployee.EmployeeId);
+                    }
+                }
+                await EmployeeService.AddEmployee(employee);
+
+                await IndexedEdbStore.DeleteEmployeeAsync("TemEmployee", employee.EmployeeId);
+            }
+        }
+
+        await FetchChangesAsync(em);
+    }
+
+    async Task FetchChangesAsync(List<Employee> em)
+    {
+
+
+        if (em != null)
+        {
+            foreach (Employee serverEmployee in em)
+            {
+                int last = DateTime.Compare(serverEmployee.LastUpdated, lastTime.LastUpdateTime);
+                if (last == 1)
+                {
+                    lastTime.LastUpdateTime = serverEmployee.LastUpdated;
+                }
+            }
+        }
+
+        List<Employee> localData = (await IndexedEdbStore.GetAllEmployeeAsync("Employee")).ToList();
+
+        bool passed = true;
+
+        if (localData != null)
+        {
+            foreach (Employee localEmployee in localData)
+            {
+                foreach (Employee serverEmployee in em)
+                {
+                    if ((localEmployee.EmployeeId).Equals(serverEmployee.EmployeeId))
+                    {
+                        passed = false;
+                    }
+                }
+
+                if (passed)
+                {
+                    await EmployeeService.AddEmployee(localEmployee);
+                }
+            }
+        }
+
+        await IndexedEdbStore.DeleteTimeAsync(0);
+        await IndexedEdbStore.StoreUpdateTime("Time", lastTime);
+    }
+} 

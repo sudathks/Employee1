@@ -1,0 +1,85 @@
+﻿@using BlazorProject.Shared
+@inject IndexedEdbStore IndexedEdbStore
+
+<MudDialog>
+    <DialogContent>
+       <MudTextField Required="true" Label="First Name" @bind-Value="employee.FirstName"/>
+       <MudTextField Required="true" Label="Last Name" @bind-Value="employee.LastName"/>
+       <MudTextField Required="true" Label="Email" @bind-Value="employee.Email"/>
+       <MudDatePicker Required="true" PickerVariant="PickerVariant.Dialog" Label="Date of Birth" @bind-Date="employee.DateOfBrith"/>
+       <MudAutocomplete 
+            T="string" 
+            Label="Gender" 
+            @bind-Value="gender" 
+            SearchFunc="@SearchGender" 
+            Variant="Variant.Outlined"
+            Required="true"/>
+        <MudAutocomplete 
+            T="Department"  
+            Label="Department" 
+            @bind-Value="department" 
+            SearchFunc="@SearchDepartment" 
+            ToStringFunc="@(e=> e==null?null : $"{e.DepartmentName}")" 
+            Variant="Variant.Outlined"
+            Required="true"/>
+            @*<MudHidden Invert="true">
+                <MudTextField Label="Update Time" @bind-Value="@updateTime" />
+            </MudHidden>*@
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Ok</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private IEnumerable<Department> Departments { get; set; }
+    private string[] GenderNames { get; set; }
+    private string gender;
+    private Department department;
+    Gender g;
+    //private DateTime? updateTime { get; set; } = DateTime.Now;
+
+    [Parameter]
+    public Employee employee {get;set;} = new Employee();
+
+    protected override async Task OnInitializedAsync()
+    {
+        gender = employee.Gender.ToString();
+        department = employee.Department;
+        department.DepartmentId = employee.DepartmentId;
+
+        GenderNames = Enum.GetNames(typeof(Gender));
+        Departments = await IndexedEdbStore.GetAllDepartmentAsync();
+    }
+
+    private void Cancel(){
+        MudDialog.Cancel();
+    }
+
+    private void Submit(){
+
+        employee.Department = department;
+        employee.DepartmentId = department.DepartmentId;
+        Enum.TryParse(gender, out g);
+        employee.Gender = g;
+        employee.LastUpdated = DateTime.Now;
+
+
+        MudDialog.Close(DialogResult.Ok<Employee>(employee));
+    }
+
+     private async Task<IEnumerable<string>> SearchGender(string value)
+    {
+        return Enum.GetNames(typeof(Gender));
+    }
+
+    private async Task<IEnumerable<Department>> SearchDepartment(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Departments;
+        return Departments.Where(x => x.DepartmentName.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+}
